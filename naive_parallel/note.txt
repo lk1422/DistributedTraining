@@ -1,0 +1,6 @@
+This code is not asyncronous however it runs off of our async server which will be used to
+try and implement a more asyncronous client loop. This "improved" implementation will be 
+based off of a bare bone version of "PipeDream". However due to the fact that I am looking
+for more model capacity through model parallelism PipeDream may not achieve these needs
+due to its parallel/pipelined nature so I will also test out this "naive" implementation
+of model parallelism.
