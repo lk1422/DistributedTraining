@@ -1,5 +1,4 @@
 import sys
-from Aux import get_device_memory
 import struct
 import pickle
 import asyncio
