@@ -2,7 +2,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import Server
-import Aux
+import Auxilary
 from asyncio import StreamReader, StreamWriter
 import asyncio
 import traceback
@@ -31,7 +31,7 @@ def handle_server_request(data: dict):
     print(f"Request Recieved: {data}")
 
     if 'GET_CUDA_MEM' in data:
-        return {'CUDA_MEM': Aux.get_device_memory()}
+        return {'CUDA_MEM': Auxilary.get_device_memory()}
     
     elif 'MODEL_DATA' in data:
         MODEL = data['MODEL_DATA']
