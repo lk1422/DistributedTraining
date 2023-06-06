@@ -35,15 +35,18 @@ def handle_server_request(data: dict):
     
     elif 'MODEL_DATA' in data:
         MODEL = data['MODEL_DATA']
-        return None
+        return {'MODEL_LOADED': True}
     
     elif 'OPTIMIZER' in data:
-        OPTIMIZER = data['OPTIMIZER']
+        optim = data['OPTIMIZER']
+        kwargs = data['kwargs']
+        kwargs['params'] = MODEL.parameters()
+        OPTIMIZER = optim(kwargs)
         return None
 
     elif 'FORWARD' in data:
         if MODEL == None:
-            THROW_ERR("model not recieved before forward call")
+            return THROW_ERR("model not recieved before forward call")
 
         output = MODEL(data['FORWARD'])        
         return output
@@ -68,6 +71,9 @@ def handle_server_request(data: dict):
 
     elif 'KILL' in data:
         return 'KILL'
+
+    else:
+        return THROW_ERR("REQUEST NOT RECOGNIZED")
 
 async def client_loop(reader : StreamReader, writer : StreamWriter):
     ERR_COUNT = 0

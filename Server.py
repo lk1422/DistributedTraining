@@ -1,4 +1,5 @@
 import sys
+import socket
 import struct
 import pickle
 import asyncio
@@ -16,22 +17,25 @@ async def send_data(writer : StreamWriter, data : object):
     writer.write(write_data)
     await writer.drain()
 
-async def recieve_data(reader):
+async def recieve_data(reader : StreamReader):
     header_size = struct.calcsize(HEADER_FORMAT)
     size_unpacked = await reader.readexactly(header_size)
     (size,) = struct.unpack(HEADER_FORMAT, size_unpacked)
     pickled_data = await reader.readexactly(size)
     return pickle.loads(pickled_data)
 
+async def send_recieve(reader : StreamReader, writer : StreamWriter,
+                       data:object):
+    await send_data(writer, data)
+    response = await recieve_data(reader)
+    return response
+
 ##Server Specific Functions##
 async def handle_connection(reader : StreamReader ,writer : StreamWriter):
     OPEN_SOCKETS.append((writer.get_extra_info('peername'), reader, writer))
     print(f"New Connection created , {writer.get_extra_info('peername')}")
 
-async def start_server():
-    server = await asyncio.start_server(handle_connection, HOST, PORT,
-                                        reuse_port=True)
-    print("Server Started, awaiting connections.")
+async def start_server(server):
     try:
         await server.serve_forever()
     except asyncio.CancelledError:
@@ -41,7 +45,10 @@ async def start_server():
         raise
 
 async def get_connections(num_connections : int):
-    server_task = asyncio.create_task(start_server())
+    server = await asyncio.start_server(handle_connection, HOST, PORT,
+                                 family=socket.AF_INET)
+    print("Server Started, awaiting connections.")
+    server_task = asyncio.create_task(start_server(server))
 
     while(True):
         await asyncio.sleep(0)
