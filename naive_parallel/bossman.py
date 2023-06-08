@@ -26,6 +26,7 @@ class BossMan():
         self.network = network
         self.network_stats = []
         self.network_size = 0
+        self.memory = {}
     
     async def setup_host(num_connections : int):
         await Server.get_connections(num_connections)
@@ -90,15 +91,11 @@ class BossMan():
         await asyncio.gather(*[Server.send_data(worker.writer,data) 
                                for worker in self.workers ])
 
-        
-
 async def error_check_response(writer : StreamWriter, response : dict):
     if 'FORCE_KILL' in response:
         print(f"ERROR IN WORKER {writer.get_extra_info('peername')}") 
         print(f"Closing connection") 
         writer.close()
-
-
 
 async def main():
     assert len(sys.argv) == 2, "USAGE: bossman.py num_workers"
@@ -124,9 +121,5 @@ async def main():
         worker.writer.close()
         await worker.writer.wait_closed()
 
-
-
-
 if __name__ == "__main__":
     asyncio.run(main())
-    

@@ -1,2 +1,8 @@
--Create Method To Break Up Model
--Create Method To Deal with Forward Construction
+-Write Forward Pass
+-Write Backward Pass
+-Make so Local_Mem is not used when the variable stored has no local uses
+
+-Train Model on naive version
+
+-Implement Pipelined version (the pipeline may not be effecient since the nodes are only
+                                connected through the server)
