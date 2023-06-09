@@ -1,4 +1,6 @@
 -Write Forward Pass
+    -Basic Forward pass works
+    -Test More complicated NN Module and dependencies
 -Write Backward Pass
 -Make so Local_Mem is not used when the variable stored has no local uses
 

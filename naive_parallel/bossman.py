@@ -1,9 +1,11 @@
-import sys
 import os
-from typing import List, Tuple
-from torch import nn
-from asyncio import StreamReader, StreamWriter
+import sys
 import asyncio
+from torch import nn
+import torch
+from typing import List, Tuple
+from torch import nn, optim, Tensor
+from asyncio import StreamReader, StreamWriter
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import Auxilary
@@ -17,7 +19,10 @@ class Worker:
         self.address = tuple
         self.reader = reader
         self.writer = writer
+        self.model_chunk = None
         self.CUDA_MEM = None
+        self.incoming_variables = []
+        self.outgoing_variables = []
 
 class BossMan():
     def __init__(self, workers: List[Worker], network : List[Tuple[nn.Module, dict, Tuple]]):
@@ -26,8 +31,9 @@ class BossMan():
         self.network = network
         self.network_stats = []
         self.network_size = 0
+        self.variable_to_node = {}
         self.memory = {}
-    
+
     async def setup_host(num_connections : int):
         await Server.get_connections(num_connections)
         workers = Server.OPEN_SOCKETS
@@ -82,10 +88,43 @@ class BossMan():
             *[(Server.send_recieve(worker.reader, worker.writer, chunk)) 
              for worker,chunk in zip(self.workers, chunks)]
              )
-        for worker, response in zip(self.workers, responses):
-            await error_check_response(worker.writer, response)
-            print(response)
+
+        for i in range(len(self.workers)):
+            await error_check_response(self.workers[i].writer, responses[i])
+            self.workers[i].model_chunk = chunks[i]
+            print(responses[i])
+
+    def gather_dependencies(self):
+        for i, worker in enumerate(self.workers):
+            for layer in worker.model_chunk:
+                if hasattr(layer, "dependencies"):
+                    worker.incoming_variables.extend(layer.dependencies)
+                if hasattr(layer, "out_variables"):
+                    worker.outgoing_variables.extend(layer.out_variables)
+
+    def load_memory(self, data : dict):
+        for key,item in data.items():
+            self.memory[key] = item
     
+    
+    async def forward(self, x : Tensor, extra_inputs : dict):
+        self.load_memory(extra_inputs)
+        for worker in self.workers:
+            outgoing = worker.outgoing_variables
+            incoming = {name:self.memory[name] for name in worker.incoming_variables}
+            request = { 
+                "FORWARD": {
+                    "input":x,
+                    "incoming":incoming,
+                    "outgoing":outgoing
+                }
+            }
+            response = await Server.send_recieve(worker.reader, worker.writer, request)
+            await error_check_response(worker.writer, response)
+            x = response["MODEL_OUT"]
+            self.load_memory(response["EXTERNAL_VARIABLES"])
+        print(x)
+                
     async def model_train(self):
         data = {"TRAIN": True}
         await asyncio.gather(*[Server.send_data(worker.writer,data) 
@@ -115,6 +154,8 @@ async def main():
     boss = BossMan(workers, test_model)
     await boss.distribute_model()
     await boss.model_train()
+    boss.gather_dependencies()
+    await boss.forward(torch.randn(32,100), {})
 
     for worker in workers:
         await Server.send_data(worker.writer, CLOSE_CONNECTION)

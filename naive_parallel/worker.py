@@ -2,12 +2,12 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import Server
-import Auxilary
-from asyncio import StreamReader, StreamWriter
 import asyncio
+import Auxilary
 import traceback
 from typing import List, Tuple
 from torch import nn, optim, Tensor
+from asyncio import StreamReader, StreamWriter
 
 
 HOST = os.environ['MODEL_HOST']
@@ -51,7 +51,9 @@ class WorkerNode():
             self.EXTERNAL_DEPENDCIES[name] = None
 
     def construct_incoming_input(self, module : nn.Module):
-        return [self.TEMP_FORWARD_MEM[input_name] for input_name in module.forward_order]
+        if hasattr(module, 'forward_order'):
+            return [self.TEMP_FORWARD_MEM[input_name] for input_name in module.forward_order]
+        return []
 
     def insert_into_memory(self, variables : List[Tuple[str, Tensor]]):
         for var_name, value in variables:
@@ -70,9 +72,13 @@ class WorkerNode():
         self.load_local_mem(model_input['incoming'])
         self.load_external_mem(model_input['outgoing'])
         for module_num, module in enumerate(self.MODEL):
-            x,outgoing = module(x, *self.construct_incoming_input(module))
+            x= module(x, *self.construct_incoming_input(module))
+            if (hasattr(module, "out_variables")):
+                outgoing = x[1]
+                x = x[0]
+            else:
+                outgoing = []
             self.insert_into_memory(outgoing)
-            x.requires_grad = True
             self.TEMP_BACKWARD_MEM[module_num] = x
         return {"MODEL_OUT": x, "EXTERNAL_VARIABLES" : self.EXTERNAL_DEPENDCIES}
 
