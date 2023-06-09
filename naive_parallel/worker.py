@@ -72,11 +72,10 @@ class WorkerNode():
         self.load_local_mem(model_input['incoming'])
         self.load_external_mem(model_input['outgoing'])
         for module_num, module in enumerate(self.MODEL):
-            x= module(x, *self.construct_incoming_input(module))
-            if (hasattr(module, "out_variables")):
-                outgoing = x[1]
-                x = x[0]
+            if (hasattr(module, "out_variables") and len(module.out_variables)):
+                x, outgoing = module(x, *self.construct_incoming_input(module))
             else:
+                x = module(x, *self.construct_incoming_input(module))
                 outgoing = []
             self.insert_into_memory(outgoing)
             self.TEMP_BACKWARD_MEM[module_num] = x

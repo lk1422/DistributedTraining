@@ -6,6 +6,7 @@ import torch
 from typing import List, Tuple
 from torch import nn, optim, Tensor
 from asyncio import StreamReader, StreamWriter
+from test import wrapped_linear
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import Auxilary
@@ -91,16 +92,21 @@ class BossMan():
 
         for i in range(len(self.workers)):
             await error_check_response(self.workers[i].writer, responses[i])
-            self.workers[i].model_chunk = chunks[i]
+            self.workers[i].model_chunk = chunks[i]["MODEL_DATA"]
             print(responses[i])
 
     def gather_dependencies(self):
-        for i, worker in enumerate(self.workers):
+        for worker in self.workers:
             for layer in worker.model_chunk:
-                if hasattr(layer, "dependencies"):
-                    worker.incoming_variables.extend(layer.dependencies)
-                if hasattr(layer, "out_variables"):
-                    worker.outgoing_variables.extend(layer.out_variables)
+                layer_init = layer[0](**layer[1])
+                if hasattr(layer_init, "dependencies"):
+                    worker.incoming_variables.extend(layer_init.dependencies)
+                if hasattr(layer_init, "out_variables"):
+                    worker.outgoing_variables.extend(layer_init.out_variables)
+            for incoming in worker.incoming_variables:
+                if incoming in worker.outgoing_variables:
+                    worker.incoming_variables.remove(incoming)
+                    worker.outgoing_variables.remove(incoming)
 
     def load_memory(self, data : dict):
         for key,item in data.items():
@@ -110,6 +116,7 @@ class BossMan():
     async def forward(self, x : Tensor, extra_inputs : dict):
         self.load_memory(extra_inputs)
         for worker in self.workers:
+            print(worker.incoming_variables)
             outgoing = worker.outgoing_variables
             incoming = {name:self.memory[name] for name in worker.incoming_variables}
             request = { 
@@ -121,6 +128,7 @@ class BossMan():
             }
             response = await Server.send_recieve(worker.reader, worker.writer, request)
             await error_check_response(worker.writer, response)
+            print(response)
             x = response["MODEL_OUT"]
             self.load_memory(response["EXTERNAL_VARIABLES"])
         print(x)
@@ -135,6 +143,7 @@ async def error_check_response(writer : StreamWriter, response : dict):
         print(f"ERROR IN WORKER {writer.get_extra_info('peername')}") 
         print(f"Closing connection") 
         writer.close()
+        raise Exception
 
 async def main():
     assert len(sys.argv) == 2, "USAGE: bossman.py num_workers"
@@ -142,20 +151,32 @@ async def main():
     workers = await BossMan.setup_host(num_workers)
     #Test Distribution
     test_model = [
-        (nn.Linear, {'in_features':100, 'out_features':512}, (32,100)),
-        (nn.Linear, {'in_features':512, 'out_features':1024}, (32, 512)),
+        (nn.Linear, {'in_features':100, 'out_features':512}, (32,  100)),
+        (wrapped_linear, {
+            'in_features':512, 
+            'out_features':1024,
+            'dependencies':["random_noise"],
+            'out_variables': ["res_1"]
+        }, [(32, 512), (32,512)]),
         (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32, 1024)),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32, 1024)),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32, 1024)),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32, 1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (wrapped_linear, {
+            'in_features':1024, 
+            'out_features':1024,
+            'dependencies':["res_1"],
+            'out_variables': []
+        }, [(32, 1024), (32,1024)]),
         (nn.Linear, {'in_features':1024, 'out_features':1}, (32, 1024))
         ]
     boss = BossMan(workers, test_model)
     await boss.distribute_model()
     await boss.model_train()
     boss.gather_dependencies()
-    await boss.forward(torch.randn(32,100), {})
+    await boss.forward(torch.randn(32,100), {"random_noise": torch.randn(32,512)})
 
     for worker in workers:
         await Server.send_data(worker.writer, CLOSE_CONNECTION)
