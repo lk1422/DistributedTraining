@@ -1,18 +1,6 @@
 import torch
 import torch.nn as nn
-from torchinfo import summary
 from typing import Tuple, List
-
-def wrap_module(module : nn.Module, dependencies : List[str], 
-                outgoing_variables : List[str]):
-    module.dependencies = []
-    module.out_variables = []
-    for dependency in dependencies:
-        module.dependencies.append(dependency)
-    for out_var in outgoing_variables:
-        module.out_variables.append(out_var)
-        setattr(module, out_var, None)
-    return module
 
 class wrapped_linear(nn.Module):
     def __init__(self, in_features=None, out_features=None, dependencies=[],
@@ -35,3 +23,37 @@ class wrapped_linear(nn.Module):
         return self.linear(x)
 
 
+TEST_RESIDUAL_MODEL = [
+        (nn.Linear, {'in_features':100, 'out_features':512}, (32,  100)),
+        (wrapped_linear, {
+            'in_features':512, 
+            'out_features':1024,
+            'dependencies':["random_noise"],
+            'out_variables': ["res_1"]
+        }, [(32, 512), (32,512)]),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (wrapped_linear, {
+            'in_features':1024, 
+            'out_features':1024,
+            'dependencies':["res_1"],
+            'out_variables': []
+        }, [(32, 1024), (32,1024)]),
+        (nn.Linear, {'in_features':1024, 'out_features':1}, (32, 1024))
+    ]
+TEST_SIMPLE_MODEL = [
+        (nn.Linear, {'in_features':100, 'out_features':512}, (32,  100)),
+        (nn.Linear, {'in_features':512, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
+        (nn.Linear, {'in_features':1024, 'out_features':1}, (32, 1024))
+    ]

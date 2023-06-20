@@ -4,7 +4,7 @@ from torchinfo import summary
 from typing import Tuple, List
 
 
-def get_module_memory(module : nn.Module, input_size : Tuple) -> int:
+def get_module_memory(module : nn.Module, input_size : List[Tuple]) -> int:
     stats = summary(module, input_size=input_size, verbose=0)
 
     return (

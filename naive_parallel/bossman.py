@@ -7,6 +7,7 @@ from typing import List, Tuple
 from torch import nn, optim, Tensor
 from asyncio import StreamReader, StreamWriter
 from test import wrapped_linear
+import test
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import Auxilary
@@ -89,7 +90,6 @@ class BossMan():
             *[(Server.send_recieve(worker.reader, worker.writer, chunk)) 
              for worker,chunk in zip(self.workers, chunks)]
              )
-
         for i in range(len(self.workers)):
             await error_check_response(self.workers[i].writer, responses[i])
             self.workers[i].model_chunk = chunks[i]["MODEL_DATA"]
@@ -108,9 +108,14 @@ class BossMan():
                     worker.incoming_variables.remove(incoming)
                     worker.outgoing_variables.remove(incoming)
 
-    def load_memory(self, data : dict):
-        for key,item in data.items():
+    def load_memory(self, data : List[Tuple[str, Tensor]]):
+        print(data)
+        for key,item in data:
             self.memory[key] = item
+
+    def load_memory_grads(self, data : List[Tuple[str, Tensor]]):
+        for name, value in data:
+            self.memory[name].grad = value
     
     
     async def forward(self, x : Tensor, extra_inputs : dict):
@@ -131,10 +136,36 @@ class BossMan():
             print(response)
             x = response["MODEL_OUT"]
             self.load_memory(response["EXTERNAL_VARIABLES"])
-        print(x)
+        return x
+    
+    async def backward(self, out_grad : Tensor):
+        for worker in reversed(self.workers):
+            incoming = [(name,self.memory[name].grad) for name in worker.outgoing_variables]
+            request = { 
+                "BACKWARD": {
+                    "NODE_OUT":out_grad,
+                    "GRADS":incoming
+                }
+            }
+            response = await Server.send_recieve(worker.reader, worker.writer, request)
+            await error_check_response(worker.writer, response)
+            print(response)
+            out_grad = response["NODE_IN"]
+            self.load_memory_grads(response["GRADS"])
+    
                 
     async def model_train(self):
         data = {"TRAIN": True}
+        await asyncio.gather(*[Server.send_data(worker.writer,data) 
+                               for worker in self.workers ])
+
+    async def model_eval(self):
+        data = {"EVAL": True}
+        await asyncio.gather(*[Server.send_data(worker.writer,data) 
+                               for worker in self.workers ])
+
+    async def node_mem_clear(self):
+        data = {"CLEAR_MEMORY": True}
         await asyncio.gather(*[Server.send_data(worker.writer,data) 
                                for worker in self.workers ])
 
@@ -150,33 +181,17 @@ async def main():
     num_workers = int(sys.argv[1])
     workers = await BossMan.setup_host(num_workers)
     #Test Distribution
-    test_model = [
-        (nn.Linear, {'in_features':100, 'out_features':512}, (32,  100)),
-        (wrapped_linear, {
-            'in_features':512, 
-            'out_features':1024,
-            'dependencies':["random_noise"],
-            'out_variables': ["res_1"]
-        }, [(32, 512), (32,512)]),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
-        (nn.Linear, {'in_features':1024, 'out_features':1024}, (32,1024)),
-        (wrapped_linear, {
-            'in_features':1024, 
-            'out_features':1024,
-            'dependencies':["res_1"],
-            'out_variables': []
-        }, [(32, 1024), (32,1024)]),
-        (nn.Linear, {'in_features':1024, 'out_features':1}, (32, 1024))
-        ]
-    boss = BossMan(workers, test_model)
+    
+    boss = BossMan(workers, test.TEST_RESIDUAL_MODEL)
     await boss.distribute_model()
     await boss.model_train()
     boss.gather_dependencies()
-    await boss.forward(torch.randn(32,100), {"random_noise": torch.randn(32,512)})
+    out = await boss.forward(torch.randn(32,100), [("random_noise", torch.randn(32,512))])
+    loss_fn = torch.nn.MSELoss()
+    target = torch.randn(32, 1)
+    loss = loss_fn(out, target)
+    loss.backward()
+    await boss.backward(out.grad)
 
     for worker in workers:
         await Server.send_data(worker.writer, CLOSE_CONNECTION)
