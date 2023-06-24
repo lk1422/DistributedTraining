@@ -24,13 +24,11 @@ async def recieve_data(reader : StreamReader):
     pickled_data = await reader.readexactly(size)
     return pickle.loads(pickled_data)
 
-async def send_recieve(reader : StreamReader, writer : StreamWriter,
-                       data:object):
+async def send_recieve(reader : StreamReader, writer : StreamWriter, data:object):
     await send_data(writer, data)
     response = await recieve_data(reader)
     return response
 
-##Server Specific Functions##
 async def handle_connection(reader : StreamReader ,writer : StreamWriter):
     OPEN_SOCKETS.append((writer.get_extra_info('peername'), reader, writer))
     print(f"New Connection created , {writer.get_extra_info('peername')}")
@@ -59,8 +57,6 @@ async def get_connections(num_connections : int):
             except asyncio.CancelledError:
                 print("Finished Connecting with workers")
                 break
-
-
 
 async def main():
     if (len(sys.argv) == 2 and sys.argv[1] == 'server'):
