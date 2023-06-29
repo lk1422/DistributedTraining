@@ -2,11 +2,11 @@
 Implementing a method of training across multiple remote devices (with GPUs). The Naive_Parallel will not feature any pipelining, after the program is able to support basic model parallel training, I will move onto developing support for data parallel training.
 
 
-Simple Model Implementation:
-  -Residual Connections and complicated inputs can be handled by wrapping a class and adding variables for in_variables and out_variables.
-  -in_variables are used for extra incoming inputs (masks, residual connections etc)
-  -out_variables are used for outgoing variables which will be used by a future module.
-  -The system supports input/output connections between modules which are not stored on the same device
+Simple Model Implementation:\
+  -Residual Connections and complicated inputs can be handled by wrapping a class and adding variables for in_variables and out_variables.\
+  -in_variables are used for extra incoming inputs (masks, residual connections etc)\
+  -out_variables are used for outgoing variables which will be used by a future module.\
+  -The system supports input/output connections between modules which are not stored on the same device\
 Here is an example residual
 
     TEST_RESIDUAL_SMALL = [
@@ -31,7 +31,7 @@ Here is an example residual
           (nn.Sigmoid,   {}, (32,1))
       ]
 
-  Simple Train Loop:
+  Simple Train Loop:\
     -The training loop has a very close resemblance to the pytorch boilerplate train loop:
 
     #Set up server and await connections
@@ -51,10 +51,10 @@ Here is an example residual
         await boss.backward(prediction.grad)
         await boss.optim_step()
 
-  Usage:
+  Usage:\
     After you have created a model which the bossman can process and initialized the bossman such as the examples above
-    just run worker.py on the worker devices and the program will execute as usual. Just remember for first set the the following enviorment variables.
-    MODEL_HOST="123.456.789" (IP of the device running  the bossman code)
+    just run worker.py on the worker devices and the program will execute as usual. Just remember for first set the the following enviorment variables.\
+    MODEL_HOST="123.456.789" (IP of the device running  the bossman code)\
     MODEL_PORT=1024 (Constant do not change)
     
     
