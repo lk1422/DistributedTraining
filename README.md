@@ -52,8 +52,8 @@ Here is an example residual
         await boss.optim_step()
 
   Usage:\
-    After you have created a model which the bossman can process and initialized the bossman such as the examples above
-    just run worker.py on the worker devices and the program will execute as usual. Just remember for first set the the following enviorment variables.\
+    After you have created a model (which the bossman can process) and initialized the bossman such as the examples above
+    just run worker.py on the worker devices. Just remember to first set the the following enviorment variables.\
     MODEL_HOST="123.456.789" (IP of the device running  the bossman code)\
     MODEL_PORT=1024 (Constant do not change)
     
